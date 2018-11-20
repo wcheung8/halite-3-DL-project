@@ -4,7 +4,7 @@ import os
 import os.path
 import pickle
 import time
-from tqdm import tqdm
+from tqdm import tqdm, tqdm_notebook
 from glob import glob
 import numpy as np
 
@@ -31,7 +31,7 @@ def parse_replay_file(file_name):
     print(f"Parsing data for {player_list}")
 
     replay = []
-    for player in tqdm(data['players']):
+    for player in tqdm_notebook(data['players']):
         replay.append(parse_player_data(data, player))
     return np.array(replay)
         
@@ -105,7 +105,7 @@ def parse_player_data(data, player):
     return list(zip(frames, moves, ships, other_ships, my_dropoffs, them_dropoffs))
 
 
-def parse_replay_folder(folder_name, player_name, max_files=None):
+def parse_replay_folder(folder_name, max_files=None):
     dump_file = f"game-data-{time.time()}.pkl"
 
     replays = sorted(glob(os.path.join(folder_name,"*.hlt")) + glob(os.path.join(folder_name, "*halite*")))
@@ -113,15 +113,15 @@ def parse_replay_folder(folder_name, player_name, max_files=None):
         replays = replays[:max_files]
 
     replay_buffer = []
-    for file_name in tqdm(replays):
+    for file_name in tqdm_notebook(replays):
         if max_files is not None and len(replay_buffer) >= max_files:
             break
         else:
             print(f"Parsing file {len(replay_buffer)+1}")
-            replay_buffer.append(parse_replay_file(file_name, player_name))
+            replay_buffer.append(parse_replay_file(file_name))
             if len(replay_buffer) % 10 == 0:
                 with open(dump_file, "wb") as f:
                     pickle.dump(replay_buffer, f)
                     f.close()
 
-    return replay_buffer
+    return np.array(replay_buffer)

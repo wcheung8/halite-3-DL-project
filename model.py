@@ -4,7 +4,7 @@ import random
 import time
 
 import numpy as np
-from tqdm import tqdm
+from tqdm import tqdm, tqdm_notebook
 
 import hlt
 
@@ -78,7 +78,7 @@ class HaliteModel:
         print("Generating Training Data")
 
         data, labels = [], []
-        for game_map, moves, ships, other_ships, dropoffs, other_dropoffs, turn_number, ship in tqdm(game_states):
+        for game_map, moves, ships, other_ships, dropoffs, other_dropoffs, turn_number, ship in tqdm_notebook(game_states):
             move = "o" if ship.id not in moves else moves[ship.id]
             # Throw away movements that take us closer to base. We will let logic take care of returning to base
             if move is not "o" and (

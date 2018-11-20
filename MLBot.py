@@ -1,44 +1,72 @@
 #!/usr/bin/env python3
-# Python 3.6
 
-import hlt
+import sys
+import os
+from collections import defaultdict
 
-from hlt import constants
+from inspect import currentframe, getframeinfo
 
-from hlt.positionals import Direction
+"""
+f = open("./run.log", "w")
 
-import random
+def log(x=None):
+    frameinfo = getframeinfo(x)
+    f.write(f"Function:{frameinfo.function}\nLine:{str(frameinfo.lineno)}\n")
+"""
 
-import logging
+from model import *
+from hlt import *
 
-""" <<<Game Begin>>> """
+class MLBot:
+    def __init__(self, weights):
+        my_model = HaliteModel(weights=weights)
+        self.my_model = my_model
 
-game = hlt.Game()
-# At this point "game" variable is populated with initial map data.
-# This is a good place to do computationally expensive start-up pre-processing.
-# As soon as you call "ready" function below, the 2 second per turn timer will start.
-game.ready("MyPythonBot")
+        game = hlt.Game()
+        game.ready(f"{os.path.basename(weights)}")
+        self.game = game
 
-logging.info("Successfully created bot! My Player ID is {}.".format(game.my_id))
 
-while True:
-    game.update_frame()
 
-    me = game.me
-    game_map = game.game_map
+    def run(self):
+        # Some minimal state to say when to go home
+        go_home = defaultdict(lambda: False)
+        while True:
+            self.game.update_frame()
+            me = self.game.me  # Here we extract our player metadata from the game state
+            game_map = self.game.game_map  # And here we extract the map metadata
+            other_players = [p for pid, p in self.game.players.items() if pid != self.game.my_id]
 
-    command_queue = []
+            command_queue = []
 
-    for ship in me.get_ships():
-        if game_map[ship.position].halite_amount < constants.MAX_HALITE / 10 or ship.is_full:
-            command_queue.append(
-                ship.move(
-                    random.choice([ Direction.North, Direction.South, Direction.East, Direction.West ])))
-        else:
-            command_queue.append(ship.stay_still())
+            for ship in me.get_ships():  # For each of our ships
+                # Did not machine learn going back to base. Manually tell ships to return home
+                if ship.position == me.shipyard.position:
+                    go_home[ship.id] = False
+                elif go_home[ship.id] or ship.halite_amount == hlt.constants.MAX_HALITE:
+                    go_home[ship.id] = True
+                    movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
+                    if movement is not None:
+                        game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
+                        command_queue.append(ship.move(movement))
+                    else:
+                        ship.stay_still()
+                    continue
 
-    if game.turn_number <= 200 and me.halite_amount >= constants.SHIP_COST and not game_map[me.shipyard].is_occupied:
-        command_queue.append(me.shipyard.spawn())
+                # Use machine learning to get a move
+                ml_move = self.my_model.predict_move(ship, game_map, me, other_players, self.game.turn_number)
 
-    game.end_turn(command_queue)
+                if ml_move is not None:
+                    movement = game_map.get_safe_move(game_map[ship.position],
+                                                      game_map[ship.position.directional_offset(ml_move)])
+                    if movement is not None:
+                        game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
+                        command_queue.append(ship.move(movement))
+                        continue
+                ship.stay_still()
 
+            # Spawn some more ships
+            if me.halite_amount >= hlt.constants.SHIP_COST and not game_map[me.shipyard].is_occupied and len(me.get_ships()) <= 4:
+                command_queue.append(self.game.me.shipyard.spawn())
+
+            self.game.end_turn(command_queue)  # Send our moves back to the game environment
