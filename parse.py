@@ -2,51 +2,20 @@ import copy
 import json
 import os
 import os.path
-import pickle
-import time
-from tqdm import tqdm, tqdm_notebook
-from glob import glob
-import numpy as np
+import zstd
 
 import hlt
-
-try:
-    import zstd
-except:
-    pass
 
 ARBITRARY_ID = -1
 
 
-def parse_replay_file(file_name):
+def parse_replay_file(file_name, player_name):
     print("Load Replay: " + file_name)
-
     with open(file_name, 'rb') as f:
-        try:
-            data = json.loads(f.read())
-        except FileNotFoundError as e:
-            raise FileNotFoundError(f"File {file_name} not found.")  # os.listdir(os.getcwd())
+        data = json.loads(zstd.loads(f.read()))
 
-    player_list = [p['name'] for p in data['players']]
-    print(f"Parsing data for {player_list}")
-
-    replay = []
-    for player in tqdm_notebook(data['players']):
-        replay.append(parse_player_data(data, player))
-    return np.array(replay)
-        
-
-
-def parse_player_data(data, player):
-    """
-    try:
-        player = [p for p in data['players'] if p['name'].split(" ")[0] == player_name][0]
-    except IndexError as e:
-        return
-    """
-
-    print(f"Load Basic Information for {player}")
-    
+    print("Load Basic Information")
+    player = [p for p in data['players'] if p['name'].split(" ")[0] == player_name][0]
     player_id = int(player['player_id'])
     my_shipyard = hlt.Shipyard(player_id, ARBITRARY_ID,
                                hlt.Position(player['factory_location']['x'], player['factory_location']['y']))
@@ -105,23 +74,13 @@ def parse_player_data(data, player):
     return list(zip(frames, moves, ships, other_ships, my_dropoffs, them_dropoffs))
 
 
-def parse_replay_folder(folder_name, max_files=None):
-    dump_file = f"game-data-{time.time()}.pkl"
-
-    replays = sorted(glob(os.path.join(folder_name,"*.hlt")) + glob(os.path.join(folder_name, "*halite*")))
-    if max_files:
-        replays = replays[:max_files]
-
+def parse_replay_folder(folder_name, player_name, max_files=None):
     replay_buffer = []
-    for file_name in tqdm_notebook(replays):
-        if max_files is not None and len(replay_buffer) >= max_files:
+    for file_name in sorted(os.listdir(folder_name)):
+        if not file_name.endswith(".hlt"):
+            continue
+        elif max_files is not None and len(replay_buffer) >= max_files:
             break
         else:
-            print(f"Parsing file {len(replay_buffer)+1}")
-            replay_buffer.append(parse_replay_file(file_name))
-            if len(replay_buffer) % 10 == 0:
-                with open(dump_file, "wb") as f:
-                    pickle.dump(replay_buffer, f)
-                    f.close()
-
-    return np.array(replay_buffer)
+            replay_buffer.append(parse_replay_file(os.path.join(folder_name, file_name), player_name))
+    return replay_buffer
