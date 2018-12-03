@@ -2,17 +2,20 @@ import copy
 import json
 import os
 import os.path
-import zstd
-
+import zstandard as zstd
 import hlt
 
 ARBITRARY_ID = -1
 
 
 def parse_replay_file(file_name, player_name):
+    x =zstd.ZstdDecompressor()
     print("Load Replay: " + file_name)
     with open(file_name, 'rb') as f:
-        data = json.loads(zstd.loads(f.read()))
+        try:
+            data = json.loads(x.decompress(f.read()))
+        except:
+            return []
 
     print("Load Basic Information")
     player = [p for p in data['players'] if p['name'].split(" ")[0] == player_name][0]
