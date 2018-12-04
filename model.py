@@ -4,8 +4,6 @@ import random
 import time
 
 import numpy as np
-from tqdm import tqdm, tqdm_notebook
-
 import hlt
 
 constants = hlt.constants
@@ -76,7 +74,8 @@ class HaliteModel:
 
     def generate_training_data(self, game_states):
         print("Generating Training Data")
-
+        
+        from tqdm import tqdm, tqdm_notebook
         data, labels = [], []
         for game_map, moves, ships, other_ships, dropoffs, other_dropoffs, turn_number, ship in tqdm_notebook(game_states):
             move = "o" if ship.id not in moves else moves[ship.id]
